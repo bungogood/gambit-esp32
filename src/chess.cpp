@@ -198,7 +198,9 @@ int board_array[129] = {  // 0x88 board + centers positional scores
 };
 
 // promoted pieces
-char promoted_pieces[] = { [0] = ' ', [4] = 'n', [5] = 'b', [6] = 'r', [7] = 'q'};
+char promoted_pieces[8] = {
+    0, 0, 0, 0, 'n', 'b', 'r', 'q'
+};
 
 char promoted_pieces_string[] = ".-pknbrq-P-KNBRQ";
 
@@ -221,20 +223,20 @@ piece_weights[] = { 0, 0, -100, 0, -300, -350, -500, -900, 0, 100, 0, 0, 300, 35
 ;---------------------------------------------------------------------------------;
 \*********************************************************************************/
 
-static inline int make_move(int side, Move_Structure move)  // MAKE MOVE
+static inline void make_move(int side, Move_Structure move)  // MAKE MOVE
 {
     board_array[move.rook_square] = board_array[move.captured_square] = board_array[move.source_square] = 0; board_array[move.target_square] = move.piece & 31;
 
-    if(!(move.rook_square & 0x88)) board_array[move.skip_square] = side + 6;
+    if (!(move.rook_square & 0x88)) board_array[move.skip_square] = side + 6;
     
-    if(move.piece_type < 3)
+    if (move.piece_type < 3)
     {
-        if(move.target_square + move.step_vector_ray + 1 & 128) board_array[move.target_square] = side + move.promoted_piece;
+        if (move.target_square + move.step_vector_ray + 1 & 128) board_array[move.target_square] = side + move.promoted_piece;
     }
 }
 
 
-static inline int unmake_move(int side, Move_Structure move)  // TAKE BACK
+static inline void unmake_move(int side, Move_Structure move)  // TAKE BACK
 {
     board_array[move.rook_square] = side + 38; board_array[move.skip_square] = board_array[move.target_square] = 0; board_array[move.source_square] = move.piece; board_array[move.captured_square] = move.capture;
 }
@@ -243,16 +245,14 @@ static inline int evaluate_position(int side)  // EVALUATE POSITION
 {
     int score = 0; int i = 0, position;
     
-    do
-    {
-        if(position = board_array[i])
-        {
+    do {
+        position = board_array[i];
+        if (position) {
             score += piece_weights[position & 15]; // material score
             (position & 8) ? (score += board_array[i + 8]) : (score -= board_array[i + 8]); // positional score
         }
-    }
-    
-    while(i = (i + 9) & ~0x88);
+        i = (i + 9) & ~0x88;
+    } while (i);
 
     return (side == 8) ? score : -score;
 }
@@ -261,66 +261,60 @@ static inline int generate_moves(int side, int en_passant, Move_List_Structure *
 {
     Move_Structure move; move.promoted_piece = 0; int directions; move_list->length = 0; move.source_square = 0;
     
-    do  // loop over board pieces
-    {
+    do { // loop over board pieces
         move.piece = board_array[move.source_square];
         
-        if(move.piece & side)
-        {
+        if (move.piece & side) {
             move.piece_type = move.piece & 7; directions = move_offsets[move.piece_type + 30];
-            
-            while(move.step_vector_ray = move_offsets[++directions]) // loop over directions
-            {
+            move.step_vector_ray = move_offsets[++directions];
+            while (move.step_vector_ray) { // loop over directions
                 move.target_square = move.source_square; move.skip_square = move.rook_square = 128;
                
-                do  // loop over squares
-                {
+                do { // loop over squares
                     move.target_square += move.step_vector_ray; move.captured_square = move.target_square;
                     
-                    if(move.target_square & 0x88) break;
-                    if(move.piece_type < 3 && move.target_square == en_passant) move.captured_square = move.target_square ^ 16; move.capture = board_array[move.captured_square];
-                    if(en_passant - 128 && board_array[en_passant] && move.target_square - en_passant < 2 && en_passant - move.target_square < 2) return 0;
-                    if(move.capture & side || move.piece_type < 3 && !(move.step_vector_ray & 7) != !move.capture) break;
-                    if((move.capture & 7) == 3) return move_list->length = 0;
+                    if (move.target_square & 0x88) break;
+                    if (move.piece_type < 3 && move.target_square == en_passant) move.captured_square = move.target_square ^ 16; move.capture = board_array[move.captured_square];
+                    if (en_passant - 128 && board_array[en_passant] && move.target_square - en_passant < 2 && en_passant - move.target_square < 2) return 0;
+                    if (move.capture & side || move.piece_type < 3 && !(move.step_vector_ray & 7) != !move.capture) break;
+                    if ((move.capture & 7) == 3) return move_list->length = 0;
 				    
                     make_move(side, move);  // make move
                     
-                    if(move.piece_type < 3)
-                    {
-                        if(move.target_square + move.step_vector_ray + 1 & 128)
-                        {
+                    if (move.piece_type < 3) {
+                        if (move.target_square + move.step_vector_ray + 1 & 128) {
                             board_array[move.target_square] |= 7; move.promoted_piece = board_array[move.target_square] & 7;
                         };
                     }
                     
-                    do
-                    {
+                    do {
                         move.move_score = evaluate_position(side); // evaluate position for move ordering
-                        if(all_moves_or_only_captures_flag && move.capture) { move_list->moves[move_list->length] = move; move_list->length++; }
-                        else if(!all_moves_or_only_captures_flag) { move_list->moves[move_list->length] = move; move_list->length++; }
+                        if (all_moves_or_only_captures_flag && move.capture) { move_list->moves[move_list->length] = move; move_list->length++; }
+                        else if (!all_moves_or_only_captures_flag) { move_list->moves[move_list->length] = move; move_list->length++; }
                         
                         (move.promoted_piece < 4) ? move.promoted_piece = 0: move.promoted_piece--;
                     }
                     
-                    while(move.piece_type - board_array[move.target_square]-- & 7 && board_array[move.target_square] & 4);
+                    while (move.piece_type - board_array[move.target_square]-- & 7 && board_array[move.target_square] & 4);
                     
                     unmake_move(side, move);  // take back
                     
                     move.capture += move.piece_type < 5;
                     
-                    if(move.piece_type < 3 && 6 * side + (move.target_square & 112) == 128 ||
-                    ((move.piece & ~24) == 35 & (directions == 13 || directions == 15)) && move.rook_square & 0x88 &&
+                    if (move.piece_type < 3 && 6 * side + (move.target_square & 112) == 128 ||
+                    (((move.piece & ~24) == 35) & (directions == 13 || directions == 15)) &&
+                    move.rook_square & 0x88 && 
                     board_array[move.rook_square = (move.source_square | 7) - (move.step_vector_ray >> 1 & 7)] & 32 &&
                     !(board_array[move.rook_square ^ 1] | board_array[move.rook_square ^ 2]))
                     { move.capture--; move.skip_square = move.target_square;}
                 }
                 
-                while(!move.capture);
+                while (!move.capture);
             }
         }
-    }
-    
-    while(move.source_square = (move.source_square + 9) & ~0x88); return 1;
+        move.source_square = (move.source_square + 9) & ~0x88;
+    } while (move.source_square);
+    return 1;
 }
 
 /*********************************************************************************\
@@ -333,20 +327,17 @@ int quiescence_search(int side, int en_passant, int alpha, int beta)  // QUIESCE
 {
     int score = evaluate_position(side);
     
-    if(score >= beta) return beta;
-    if(score > alpha) alpha = score; 
+    if (score >= beta) return beta;
+    if (score > alpha) alpha = score; 
 	
 	Move_List_Structure move_list[1];
 	
-	if(!generate_moves(side, en_passant, move_list, 1)) return 10000;  // checkmate evaluation
+	if (!generate_moves(side, en_passant, move_list, 1)) return 10000;  // checkmate evaluation
 	
-	for(int i = 0; i < move_list->length; i++)  // loop over move list
-    {   
-        for(int j = i + 1; j < move_list->length; j++)
-        {
+	for(int i = 0; i < move_list->length; i++) { // loop over move list
+        for(int j = i + 1; j < move_list->length; j++) {
             // order moves to reduce number of traversed nodes
-            if(move_list->moves[i].move_score < move_list->moves[j].move_score)
-            {
+            if (move_list->moves[i].move_score < move_list->moves[j].move_score) {
                 Move_Structure move = move_list->moves[i];
                 move_list->moves[i] = move_list->moves[j];
                 move_list->moves[j] = move;
@@ -357,8 +348,8 @@ int quiescence_search(int side, int en_passant, int alpha, int beta)  // QUIESCE
         int score = -quiescence_search(24 - side, move_list->moves[i].skip_square, -beta, -alpha);  // recursive quiescence call
         unmake_move(side, move_list->moves[i]);  // take back
 
-        if(score >= beta) return beta;
-        if(score > alpha) { alpha = score; }
+        if (score >= beta) return beta;
+        if (score > alpha) { alpha = score; }
     }
     
     return alpha;
@@ -368,16 +359,13 @@ static int search_position(int side, int en_passant, int alpha, int beta, int de
 {
     Move_List_Structure move_list[1];  int old_alpha = alpha; Move_Structure move;  // x - old alpha
     
-    if(!depth) return quiescence_search(side, en_passant, alpha, beta);
-    if(!generate_moves(side, en_passant, move_list, 0)) return 10000;  // checkmate evaluation
+    if (!depth) return quiescence_search(side, en_passant, alpha, beta);
+    if (!generate_moves(side, en_passant, move_list, 0)) return 10000;  // checkmate evaluation
     
-    for(int i = 0; i < move_list->length; i++)  // loop over move list
-    {   
-        for(int j = i + 1; j < move_list->length; j++)
-        {
+    for(int i = 0; i < move_list->length; i++) { // loop over move list
+        for(int j = i + 1; j < move_list->length; j++) {
             // order moves to reduce number of traversed nodes
-            if(move_list->moves[i].move_score < move_list->moves[j].move_score)
-            {
+            if (move_list->moves[i].move_score < move_list->moves[j].move_score) {
                 Move_Structure temp_move = move_list->moves[i];
                 move_list->moves[i] = move_list->moves[j];
                 move_list->moves[j] = temp_move;
@@ -390,11 +378,11 @@ static int search_position(int side, int en_passant, int alpha, int beta, int de
 
         search_info->best_move = move_list->moves[i];  // store best move so far
 
-        if(score >= beta) return beta;
-        if(score > alpha) { alpha = score; move = move_list->moves[i]; }
+        if (score >= beta) return beta;
+        if (score > alpha) { alpha = score; move = move_list->moves[i]; }
     }
     
-    if(alpha != old_alpha) search_info->best_move = move;  // store best move
+    if (alpha != old_alpha) search_info->best_move = move;  // store best move
     
     return alpha;
 }
@@ -409,20 +397,17 @@ Move_Structure parse_move(int side, int en_passant, char *move_string) // PARSE 
 {
     Move_List_Structure move_list[1]; Move_Structure move; generate_moves(side, en_passant, move_list, 0);
     
-    for(int i = 0; i < move_list->length; i++)
-    {
+    for(int i = 0; i < move_list->length; i++) {
         move = move_list->moves[i];
         
-        if(move.source_square == (move_string[0] - 'a') + (7 - (move_string[1] - '0' - 1)) * 16 &&
-           move.target_square == (move_string[2] - 'a') + (7 - (move_string[3] - '0' - 1)) * 16)
-        {           
-            
-            if(move.promoted_piece)
-            {
-                if(promoted_pieces[move.promoted_piece] == move_string[4]) return move;
+        if (move.source_square == (move_string[0] - 'a') + (7 - (move_string[1] - '0' - 1)) * 16 &&
+           move.target_square == (move_string[2] - 'a') + (7 - (move_string[3] - '0' - 1)) * 16) { 
+
+            if (move.promoted_piece) {
+                if (promoted_pieces[move.promoted_piece] == move_string[4]) return move;
                 continue;
             }
-            
+
             return move;
         }
     }
@@ -432,9 +417,8 @@ Move_Structure parse_move(int side, int en_passant, char *move_string) // PARSE 
 
 void print_board()  // Print board
 {
-    for(int i = 0; i < 128; i++)
-    {
-        if(!(i % 16)) printf(" %d  ", 8 - (i / 16));
+    for(int i = 0; i < 128; i++) {
+        if (!(i % 16)) printf(" %d  ", 8 - (i / 16));
         printf(" %c", ((i & 8) && (i += 7)) ? '\n' : promoted_pieces_string[board_array[i] & 15]);
     }
     
@@ -466,16 +450,15 @@ int main()
     
     print_board();  // print board
 
-    while(1)  // game loop
-    {
+    while (1) { // game loop
         memset(&move_string[0], 0, sizeof(move_string));
         
-        if(!fgets(move_string, 6, stdin)) continue;
-        if(move_string[0] == '\n') continue;
+        if (!fgets(move_string, 6, stdin)) continue;
+        if (move_string[0] == '\n') continue;
             
         Move_Structure move = parse_move(side, en_passant_square, move_string);  // parse move
         
-        if(!move.source_square && !move.target_square && !move.promoted_piece) { printf("illegal move\n"); continue; }
+        if (!move.source_square && !move.target_square && !move.promoted_piece) { printf("illegal move\n"); continue; }
         
         make_move(side, move); side = 24 - side; en_passant_square = move.skip_square; // make move, update side/e.p.
         print_board();  // print board
@@ -483,8 +466,7 @@ int main()
         int score = search_position(side, en_passant_square, -10000, 10000, depth, search_info);  // search position
         printf("\nScore: %d\n\n", score);
         
-        if(score == 10000 || score == -10000) // mate
-        {
+        if (score == 10000 || score == -10000) { // mate
             make_move(side, search_info->best_move); side = 24 - side; en_passant_square = search_info->best_move.skip_square;
             print_board(); 
             (score == 10000) ?
