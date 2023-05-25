@@ -310,6 +310,7 @@ static inline int generate_moves(int side, int en_passant, Move_List_Structure *
                 }
                 
                 while (!move.capture);
+                move.step_vector_ray = move_offsets[++directions];
             }
         }
         move.source_square = (move.source_square + 9) & ~0x88;
@@ -401,7 +402,7 @@ Move_Structure parse_move(int side, int en_passant, char *move_string) // PARSE 
         move = move_list->moves[i];
         
         if (move.source_square == (move_string[0] - 'a') + (7 - (move_string[1] - '0' - 1)) * 16 &&
-           move.target_square == (move_string[2] - 'a') + (7 - (move_string[3] - '0' - 1)) * 16) { 
+            move.target_square == (move_string[2] - 'a') + (7 - (move_string[3] - '0' - 1)) * 16) { 
 
             if (move.promoted_piece) {
                 if (promoted_pieces[move.promoted_piece] == move_string[4]) return move;
